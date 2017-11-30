@@ -103,3 +103,53 @@ void normalize_freqs(uint64_t* freqs, size_t n)
     }
     assert(std::accumulate(freqs, freqs + consts::SIGMA, 0ULL) == consts::M);
 }
+
+size_t vbyte_encode(uint64_t x, uint8_t*& out)
+{
+    assert(x < (1ULL << 16));
+    if (x < 128ULL) {
+        *out++ = x;
+        return 1;
+    } else {
+        *out++ = 128ULL | (x >> 8);
+        *out++ = x & 0xff;
+        return 2;
+    }
+}
+
+size_t encode_prelude_rle_vbyte(uint64_t* freqs, uint8_t*& out)
+{
+    size_t written_bytes = 0;
+    // RLE encode the symbols we have
+    uint8_t run = 0;
+    for (size_t i = 0; i < consts::SIGMA; i++) {
+        if (freqs[i] != 0) {
+            if (run) {
+                run++;
+            } else {
+                *out++ = uint8_t(i);
+                written_bytes++;
+                run = 1;
+            }
+        } else {
+            if (run) {
+                *out++ = uint8_t(run);
+                written_bytes++;
+                run = 0;
+            }
+        }
+    }
+    if (run) {
+        *out++ = uint8_t(run);
+        written_bytes++;
+    }
+
+    // (2) vbyte encode freqs
+    for (size_t i = 0; i < consts::SIGMA; i++) {
+        if (freqs[i] != 0) {
+            written_bytes += vbyte_encode(freqs[i], out);
+        }
+    }
+
+    return written_bytes;
+}
